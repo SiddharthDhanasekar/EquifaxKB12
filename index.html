@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.jsdelivr.net/npm/dom-to-image-more@3.6.0/dist/dom-to-image-more.min.js"></script>
+    <title>Equifax Knowledge Base System</title>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        margin: 0;
+      }
+    </style>
+    <link href="/src/index.css" rel="stylesheet" />
+    <script src="/debug-bridge.js"></script>
+    <!-- Screenshot capture listener -->
+    <script>
+      window.addEventListener('message', e => {
+        if (e.data === 'capture-webc') {
+          // @ts-ignore domtoimage is injected globally above
+          domtoimage.toPng(document.documentElement).then(png => {
+            window.parent.postMessage({ webcScreenshot: png }, '*');
+          });
+        }
+      });
+    </script>
+    <!-- Helper script to expose clickable elements & click actions to parent via postMessage -->
+    <script>
+      window.addEventListener('message', e => {
+        if (e.data === 'get-clickables') {
+          const selectors = [
+            'a','button','[role="button"]','input[type="button"]','input[type="submit"]','[onclick]','.clickable','[class*="btn"]','[class*="button"]'
+          ];
+          const elements = Array.from(document.querySelectorAll(selectors.join(',')));
+          const list = elements.map((el, index) => {
+            const rect = el.getBoundingClientRect();
+            const id = el.id;
+            const classes = Array.from(el.classList).join(' ');
+            const tag = el.tagName.toLowerCase();
+            let selector = '';
+            if (id) selector = '#' + id;
+            else if (classes) selector = tag + '.' + classes.split(' ').join('.');
+            else selector = tag + ':nth-of-type(' + (index + 1) + ')';
+            return {
+              index,
+              tagName: el.tagName.toLowerCase(),
+              text: (el.innerText || el.textContent || '').trim().substring(0, 100),
+              selector,
+              rect: { x: Math.round(rect.left), y: Math.round(rect.top), width: Math.round(rect.width), height: Math.round(rect.height) }
+            };
+          });
+          window.parent.postMessage({ webcClickables: list }, '*');
+        } else if (typeof e.data === 'object' && e.data !== null && (e.data.clickElementIndex !== undefined || e.data.clickElementSelector)) {
+          let el = null;
+          const selectors = [
+            'a','button','[role="button"]','input[type="button"]','input[type="submit"]','[onclick]','.clickable','[class*="btn"]','[class*="button"]'
+          ];
+          if (e.data.clickElementIndex !== undefined) {
+            const elements = Array.from(document.querySelectorAll(selectors.join(',')));
+            el = elements[e.data.clickElementIndex];
+          } else if (e.data.clickElementSelector) {
+            el = document.querySelector(e.data.clickElementSelector);
+          }
+          if (el) {
+            // @ts-ignore
+            el.click();
+            window.parent.postMessage({ webcClickAck: true }, '*');
+          } else {
+            window.parent.postMessage({ webcClickAck: false, error: 'Element not found' }, '*');
+          }
+        }
+      });
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
